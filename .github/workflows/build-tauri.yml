@@ -13,7 +13,23 @@ jobs:
         runs-on: ${{ matrix.os }}
         strategy:
             matrix:
-                os: [windows-2022, ubuntu-22.04, ubuntu-22.04-arm]
+                include:
+                    - os: windows-2022
+                      target: x86_64-pc-windows-msvc
+                      bundle: nsis
+                      artifact_name: windows-2022
+                    - os: windows-2022
+                      target: aarch64-pc-windows-msvc
+                      bundle: nsis
+                      artifact_name: windows-arm64
+                    - os: ubuntu-22.04
+                      target: x86_64-unknown-linux-gnu
+                      bundle: appimage,deb
+                      artifact_name: ubuntu-22.04
+                    - os: ubuntu-22.04-arm
+                      target: aarch64-unknown-linux-gnu
+                      bundle: appimage,deb
+                      artifact_name: ubuntu-22.04-arm
 
         steps:
             - name: 安装构建依赖
@@ -55,14 +71,7 @@ jobs:
               run: yarn tauri info
 
             - name: 构建 Tauri 应用
-              if: matrix.os == 'windows-2022'
-              run: yarn build:tauri -t x86_64-pc-windows-msvc -b nsis
-            - name: 构建 Tauri 应用
-              if: matrix.os == 'ubuntu-22.04'
-              run: yarn build:tauri -t x86_64-unknown-linux-gnu -b appimage,deb
-            - name: 构建 Tauri 应用
-              if: matrix.os == 'ubuntu-22.04-arm'
-              run: yarn build:tauri -t aarch64-unknown-linux-gnu -b appimage,deb
+              run: yarn build:tauri -t ${{ matrix.target }} -b ${{ matrix.bundle }}
 
             - name: 准备产物目录
               if: matrix.os != 'windows-2022'
@@ -85,5 +94,5 @@ jobs:
             - name: 上传构建产物
               uses: actions/upload-artifact@v4
               with:
-                  name: ${{ inputs.version }}-${{ matrix.os }}
+                  name: ${{ inputs.version }}-${{ matrix.artifact_name }}
                   path: upload/
