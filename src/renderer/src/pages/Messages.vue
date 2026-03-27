@@ -57,7 +57,8 @@
                         @contextmenu.prevent="systemNoticeMenuShow($event)"
                         @touchstart="systemNoticeMenuStart($event)"
                         @touchmove="showMenuMove"
-                        @touchend="showMenuEnd" />
+                        @touchend="showMenuEnd"
+                        @touchcancel="showMenuEnd" />
                     <!--- 群组消息 -->
                     <FriendBody
                         v-if="runtimeData.groupAssistList && runtimeData.groupAssistList.length > 0"
@@ -85,7 +86,8 @@
                         @click="userClick(item)"
                         @touchstart="showMenuStart($event, item)"
                         @touchmove="showMenuMove"
-                        @touchend="showMenuEnd" />
+                        @touchend="showMenuEnd"
+                        @touchcancel="showMenuEnd" />
                 </TransitionGroup>
             </div>
             <div id="group-assist-message-list"
@@ -134,7 +136,8 @@
                         @click="userClick(item)"
                         @touchstart="showMenuStart($event, item)"
                         @touchmove="showMenuMove"
-                        @touchend="showMenuEnd" />
+                        @touchend="showMenuEnd"
+                        @touchcancel="showMenuEnd" />
                 </TransitionGroup>
             </div>
         </div>

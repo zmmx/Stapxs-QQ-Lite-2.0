@@ -9,7 +9,8 @@
         :class="'top-bar' + ((backend.platform == 'win32' && dev) ? ' win' : '')"
         name="appbar"
         data-tauri-drag-region="true"
-        @mousedown="handleAppbarMouseDown">
+        @mousedown="handleAppbarMouseDown"
+        @pointerdown="handleAppbarPointerDown">
         <div class="bar-button" @click="barMainClick()" />
         <div class="space" />
         <div class="controller">
@@ -586,19 +587,31 @@ export default defineComponent({
         },
 
         /**
+         * 统一判断 appbar 是否允许触发窗口拖拽
+         */
+        canStartAppbarDrag(event: MouseEvent | PointerEvent) {
+            if (!(backend.platform === 'linux' && backend.type === 'tauri')) return false
+            const target = event.target as HTMLElement | null
+            if (!target) return false
+            if (target.closest('.bar-button') || target.closest('.controller')) return false
+            return true
+        },
+
+        /**
          * 处理 appbar 鼠标按下事件（Linux 平台窗口拖拽）
          */
         handleAppbarMouseDown(event: MouseEvent) {
-            // 只在 Linux + Tauri 平台生效
-            if (backend.platform === 'linux' && backend.type === 'tauri') {
-                // 检查是否点击了按钮或控制器
-                const target = event.target as HTMLElement
-                if (target.closest('.bar-button') || target.closest('.controller')) {
-                    return
-                }
-                // 调用 Tauri 拖拽命令
-                backend.call(undefined, 'win:startDrag', false)
-            }
+            if (!this.canStartAppbarDrag(event)) return
+            backend.call(undefined, 'win:startDrag', false)
+        },
+
+        /**
+         * 处理 appbar 指针按下事件（触控笔 / 触屏优先走这里）
+         */
+        handleAppbarPointerDown(event: PointerEvent) {
+            if (!this.canStartAppbarDrag(event)) return
+            if (event.pointerType === 'mouse') return
+            backend.call(undefined, 'win:startDrag', false)
         },
 
         /**

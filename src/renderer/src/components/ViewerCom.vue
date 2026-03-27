@@ -124,19 +124,22 @@
                             }"
                             @touchstart="onGlobalTouchStart"
                             @touchmove="onGlobalTouchMove"
-                            @touchend="onGlobalTouchEnd">
+                            @touchend="onGlobalTouchEnd"
+                            @touchcancel="onGlobalTouchEnd">
                             <!-- 水平滚动条 -->
                             <div v-hide="!showScrollbarX" class="scrollbar x"
                                 :class="{ 'dragging': scrollBarDrag === 'x' }"
                                 @wheel.stop.prevent="onScrollbarWheel('x', $event)"
-                                @mousedown="onScrollbarDrag('x', $event)">
+                                @mousedown="onScrollbarDrag('x', $event)"
+                                @touchstart.stop.prevent="onScrollbarTouchDrag('x', $event)">
                                 <div class="scrollbar-thumb" :style="scrollbarThumbXStyle" />
                             </div>
                             <!-- 垂直滚动条 -->
                             <div v-hide="!showScrollbarY" class="scrollbar y"
                                 :class="{ 'dragging': scrollBarDrag === 'y' }"
                                 @wheel.stop.prevent="onScrollbarWheel('y', $event)"
-                                @mousedown.stop.prevent="onScrollbarDrag('y', $event)">
+                                @mousedown.stop.prevent="onScrollbarDrag('y', $event)"
+                                @touchstart.stop.prevent="onScrollbarTouchDrag('y', $event)">
                                 <div class="scrollbar-thumb" :style="scrollbarThumbYStyle" />
                             </div>
                             <img v-show="!edit"
@@ -153,6 +156,7 @@
                                 @touchstart="onImgTouchStart"
                                 @touchmove="onImgTouchMove"
                                 @touchend="onImgTouchEnd"
+                                @touchcancel="onImgTouchEnd"
                                 @mouseleave="mouseMoveInfo=undefined">
                             <canvas v-show="edit" ref="canvas"
                                 :class="getImgCursorClassByTool()"
@@ -166,6 +170,7 @@
                                 @touchstart="onImgTouchStart"
                                 @touchmove="onImgTouchMove"
                                 @touchend="onImgTouchEnd"
+                                @touchcancel="onImgTouchEnd"
                                 @mouseleave="mouseMoveInfo=undefined;" />
                         </div>
                     </div>
@@ -706,67 +711,87 @@ function onScrollbarWheel(axis: 'x'|'y', event: WheelEvent) {
  * @param axis
  * @param event
  */
-function onScrollbarDrag(axis: 'x' | 'y', event: MouseEvent) {
-    let lastPos: number
-    scrollBarDrag.value = axis
-    const updatePos = (event: MouseEvent) => {
-        if (axis === 'x')
-            lastPos = event.clientX
-        else
-            lastPos = event.clientY
+type ScrollbarPointerInput = MouseEvent | TouchEvent
+
+function getPointerClientPos(axis: 'x' | 'y', event: ScrollbarPointerInput) {
+    const point = event instanceof TouchEvent ? event.touches[0] ?? event.changedTouches[0] : event
+    if (!point) return 0
+    return axis === 'x' ? point.clientX : point.clientY
+}
+
+function applyScrollbarMove(axis: 'x' | 'y', move: number) {
+    let imgWidth = 0
+    let imgHeight = 0
+    if (modify.rotate % 180 === 0) {
+        imgWidth = currentImgInfo.value?.width || 0
+        imgHeight = currentImgInfo.value?.height || 0
+    } else {
+        imgWidth = currentImgInfo.value?.height || 0
+        imgHeight = currentImgInfo.value?.width || 0
     }
-    updatePos(event)
-    const getDeltaAndUpdate = (event: MouseEvent) => {
-        let delta: number
-        if (axis === 'x') {
-            delta = event.clientX - lastPos
-            lastPos = event.clientX
-        }else {
-            delta = event.clientY - lastPos
-            lastPos = event.clientY
-        }
-        return delta
-    }
-    mousemoveMask((event: MouseEvent) => {
-        const move = getDeltaAndUpdate(event)
-        let imgWidth = 0
-        let imgHeight = 0
+    if (axis === 'x') {
+        modify.x -= move * imgWidth * modify.scale / (vw.value * 100)
+        const info = currentImgInfo.value
+        if (!info) return
         if (modify.rotate % 180 === 0) {
-            imgWidth = currentImgInfo.value?.width || 0
-            imgHeight = currentImgInfo.value?.height || 0
-        } else {
-            imgWidth = currentImgInfo.value?.height || 0
-            imgHeight = currentImgInfo.value?.width || 0
+            const maxOffset = (info.width * modify.scale - vw.value * 100) / 2
+            modify.x = Math.max(-maxOffset, Math.min(modify.x, maxOffset))
         }
-        if (axis === 'x') {
-            // 横向滚动
-            modify.x -= move * imgWidth * modify.scale / (vw.value * 100)
-            // 限制范围
-            const info = currentImgInfo.value
-            if (!info) return true
-            if (modify.rotate % 180 === 0) {
-                const maxOffset = (info.width * modify.scale - vw.value * 100) / 2
-                modify.x = Math.max(-maxOffset, Math.min(modify.x, maxOffset))
-            }
-            else{
-                const maxOffset = (info.height * modify.scale - vw.value * 100) / 2
-                modify.x = Math.max(-maxOffset, Math.min(modify.x, maxOffset))
-            }
-        } else {
-            // 纵向滚动
-            modify.y -= move * imgHeight * modify.scale / (vh.value * 100)
-            const info = currentImgInfo.value
-            if (!info) return true
-            if (modify.rotate % 180 === 0) {
-                const maxOffset = (info.height * modify.scale - vh.value * 100) / 2
-                modify.y = Math.max(-maxOffset, Math.min(modify.y, maxOffset))
-            }else {
-                const maxOffset = (info.width * modify.scale - vh.value * 100) / 2
-                modify.y = Math.max(-maxOffset, Math.min(modify.y, maxOffset))
-            }
+        else {
+            const maxOffset = (info.height * modify.scale - vw.value * 100) / 2
+            modify.x = Math.max(-maxOffset, Math.min(modify.x, maxOffset))
         }
+    } else {
+        modify.y -= move * imgHeight * modify.scale / (vh.value * 100)
+        const info = currentImgInfo.value
+        if (!info) return
+        if (modify.rotate % 180 === 0) {
+            const maxOffset = (info.height * modify.scale - vh.value * 100) / 2
+            modify.y = Math.max(-maxOffset, Math.min(modify.y, maxOffset))
+        } else {
+            const maxOffset = (info.width * modify.scale - vh.value * 100) / 2
+            modify.y = Math.max(-maxOffset, Math.min(modify.y, maxOffset))
+        }
+    }
+}
+
+function onScrollbarDrag(axis: 'x' | 'y', event: MouseEvent) {
+    let lastPos = getPointerClientPos(axis, event)
+    scrollBarDrag.value = axis
+    mousemoveMask((event: MouseEvent) => {
+        const currentPos = getPointerClientPos(axis, event)
+        const move = currentPos - lastPos
+        lastPos = currentPos
+        applyScrollbarMove(axis, move)
         return true
     }, _ => scrollBarDrag.value = undefined)
+}
+
+function onScrollbarTouchDrag(axis: 'x' | 'y', event: TouchEvent) {
+    const firstPoint = event.touches[0]
+    if (!firstPoint) return
+    handleEvent(event)
+    scrollBarDrag.value = axis
+    let lastPos = getPointerClientPos(axis, event)
+
+    const onMove = (moveEvent: TouchEvent) => {
+        const currentPos = getPointerClientPos(axis, moveEvent)
+        const move = currentPos - lastPos
+        lastPos = currentPos
+        handleEvent(moveEvent)
+        applyScrollbarMove(axis, move)
+    }
+    const onEnd = (endEvent: TouchEvent) => {
+        handleEvent(endEvent)
+        scrollBarDrag.value = undefined
+        window.removeEventListener('touchmove', onMove)
+        window.removeEventListener('touchend', onEnd)
+        window.removeEventListener('touchcancel', onEnd)
+    }
+
+    window.addEventListener('touchmove', onMove, { passive: false })
+    window.addEventListener('touchend', onEnd, { passive: false })
+    window.addEventListener('touchcancel', onEnd, { passive: false })
 }
 //#endregion
 
@@ -806,55 +831,62 @@ function onWheel(event: WheelEvent) {
     modify.scale = newScale
 }
 let mouseDownTime = 0
-function onMouseDown(event: MouseEvent) {
-    handleEvent(event)
+function dispatchPointerStart(x: number, y: number) {
     mouseDownTime = Date.now()
     dragging.value = true
 
     switch (currentTool.value) {
         case 'hand':
-            handMouseDown(event.clientX, event.clientY)
+            handMouseDown(x, y)
             break
         case 'pen':
-            penMouseDown(event.clientX, event.clientY)
+            penMouseDown(x, y)
             break
         case 'rect':
-            rectMouseDown(event.clientX, event.clientY)
+            rectMouseDown(x, y)
             break
     }
 }
-function onMouseMove(event: MouseEvent) {
-    handleEvent(event)
-    mouseMoveCheck()
-
+function dispatchPointerMove(x: number, y: number) {
     switch (currentTool.value) {
         case 'hand':
-            handMouseMove(event.clientX, event.clientY)
+            handMouseMove(x, y)
             break
         case 'pen':
-            penMouseMove(event.clientX, event.clientY)
+            penMouseMove(x, y)
             break
         case 'rect':
-            rectMouseMove(event.clientX, event.clientY)
+            rectMouseMove(x, y)
             break
     }
-
 }
-function onMouseUp(event: MouseEvent) {
-    handleEvent(event)
+function dispatchPointerEnd(x: number, y: number) {
     dragging.value = false
 
     switch (currentTool.value) {
         case 'hand':
-            handMouseUp(event.clientX, event.clientY)
+            handMouseUp(x, y)
             break
         case 'pen':
-            penMouseUp(event.clientX, event.clientY)
+            penMouseUp(x, y)
             break
         case 'rect':
-            rectMouseUp(event.clientX, event.clientY)
+            rectMouseUp(x, y)
             break
     }
+}
+function onMouseDown(event: MouseEvent) {
+    handleEvent(event)
+    dispatchPointerStart(event.clientX, event.clientY)
+}
+function onMouseMove(event: MouseEvent) {
+    handleEvent(event)
+    mouseMoveCheck()
+    dispatchPointerMove(event.clientX, event.clientY)
+}
+function onMouseUp(event: MouseEvent) {
+    handleEvent(event)
+    dispatchPointerEnd(event.clientX, event.clientY)
 }
 function onClick(event: Event) {
     handleEvent(event)
@@ -869,62 +901,28 @@ function onMouseout(event: MouseEvent) {
 let onImgTouchFlag = false
 function onImgTouchStart(event: TouchEvent) {
     if (event.touches.length !== 1) return
-    dragging.value = true
-
-    mouseDownTime = Date.now()
 
     handleEvent(event)
     onImgTouchFlag = true
     const touch = event.touches[0]
-    switch (currentTool.value) {
-        case 'hand':
-            handMouseDown(touch.clientX, touch.clientY)
-            break
-        case 'pen':
-            penMouseDown(touch.clientX, touch.clientY)
-            break
-        case 'rect':
-            rectMouseDown(touch.clientX, touch.clientY)
-            break
-    }
+    dispatchPointerStart(touch.clientX, touch.clientY)
 }
 function onImgTouchMove(event: TouchEvent) {
     if (event.touches.length !== 1) return
     handleEvent(event)
     const touch = event.touches[0]
-    switch (currentTool.value) {
-        case 'hand':
-            handMouseMove(touch.clientX, touch.clientY)
-            break
-        case 'pen':
-            penMouseMove(touch.clientX, touch.clientY)
-            break
-        case 'rect':
-            rectMouseMove(touch.clientX, touch.clientY)
-            break
-    }
+    dispatchPointerMove(touch.clientX, touch.clientY)
 }
 function onImgTouchEnd(event: TouchEvent) {
     if (!onImgTouchFlag) return
     handleEvent(event)
     onImgTouchFlag = false
-    dragging.value = false
 
     // 点击判定
     onClick(event)
 
     // 结束单指操作
-    switch (currentTool.value) {
-        case 'hand':
-            handMouseUp(0, 0)
-            break
-        case 'pen':
-            penMouseUp(0, 0)
-            break
-        case 'rect':
-            rectMouseUp(0, 0)
-            break
-    }
+    dispatchPointerEnd(0, 0)
 }
 
 let onGlobalTouch = false

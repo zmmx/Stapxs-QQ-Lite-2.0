@@ -255,7 +255,11 @@
                             'img-pan': true,
                             'ss-card': true,
                         }"
-                        @wheel="($event.currentTarget as HTMLElement).scrollLeft += $event.deltaY">
+                        @wheel="($event.currentTarget as HTMLElement).scrollLeft += $event.deltaY"
+                        @touchstart.passive="onImgTrayTouchStart"
+                        @touchmove.prevent="onImgTrayTouchMove"
+                        @touchend="onImgTrayTouchEnd"
+                        @touchcancel="onImgTrayTouchEnd">
                         <div class="imgs">
                             <div v-for="[key, value] in imgCache"
                                 :key="'imgCache-' + key">
@@ -735,6 +739,9 @@ import { Img } from '@renderer/function/model/img'
                 atScrollInterval: null as NodeJS.Timeout | null,
                 searchDebounceTimer: null as NodeJS.Timeout | null,
                 searchRequestId: 0,
+                imgTrayTouchStartX: 0,
+                imgTrayTouchScrollLeft: 0,
+                imgTrayTouchActive: false,
                 isShowTime,
                 isDeleteMsg,
                 isDev: import.meta.env.DEV,
@@ -793,6 +800,25 @@ import { Img } from '@renderer/function/model/img'
             })
         },
         methods: {
+            onImgTrayTouchStart(event: TouchEvent) {
+                const tray = event.currentTarget as HTMLElement | null
+                const touch = event.touches[0]
+                if (!tray || !touch) return
+                this.imgTrayTouchActive = true
+                this.imgTrayTouchStartX = touch.clientX
+                this.imgTrayTouchScrollLeft = tray.scrollLeft
+            },
+            onImgTrayTouchMove(event: TouchEvent) {
+                if (!this.imgTrayTouchActive) return
+                const tray = event.currentTarget as HTMLElement | null
+                const touch = event.touches[0]
+                if (!tray || !touch) return
+                const deltaX = touch.clientX - this.imgTrayTouchStartX
+                tray.scrollLeft = this.imgTrayTouchScrollLeft - deltaX
+            },
+            onImgTrayTouchEnd() {
+                this.imgTrayTouchActive = false
+            },
             resizeMainInput(target?: HTMLTextAreaElement | HTMLInputElement | null) {
                 let input = target ?? (document.getElementById('main-input') as HTMLTextAreaElement | HTMLInputElement | null)
                 input = input ?? (document.getElementById('main-input-ex') as HTMLTextAreaElement | HTMLInputElement | null)
