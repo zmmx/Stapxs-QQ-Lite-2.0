@@ -831,9 +831,15 @@ function onWheel(event: WheelEvent) {
     modify.scale = newScale
 }
 let mouseDownTime = 0
+let lastPointerPosition: { x: number, y: number } | undefined
+let pointerStartPosition: { x: number, y: number } | undefined
+let pointerMoved = false
 function dispatchPointerStart(x: number, y: number) {
     mouseDownTime = Date.now()
     dragging.value = true
+    lastPointerPosition = { x, y }
+    pointerStartPosition = { x, y }
+    pointerMoved = false
 
     switch (currentTool.value) {
         case 'hand':
@@ -848,6 +854,14 @@ function dispatchPointerStart(x: number, y: number) {
     }
 }
 function dispatchPointerMove(x: number, y: number) {
+    lastPointerPosition = { x, y }
+    if (pointerStartPosition) {
+        const dx = x - pointerStartPosition.x
+        const dy = y - pointerStartPosition.y
+        if (Math.abs(dx) > 8 || Math.abs(dy) > 8)
+            pointerMoved = true
+    }
+
     switch (currentTool.value) {
         case 'hand':
             handMouseMove(x, y)
@@ -862,6 +876,7 @@ function dispatchPointerMove(x: number, y: number) {
 }
 function dispatchPointerEnd(x: number, y: number) {
     dragging.value = false
+    lastPointerPosition = { x, y }
 
     switch (currentTool.value) {
         case 'hand':
@@ -874,6 +889,8 @@ function dispatchPointerEnd(x: number, y: number) {
             rectMouseUp(x, y)
             break
     }
+
+    pointerStartPosition = undefined
 }
 function onMouseDown(event: MouseEvent) {
     handleEvent(event)
@@ -891,6 +908,7 @@ function onMouseUp(event: MouseEvent) {
 function onClick(event: Event) {
     handleEvent(event)
     if (Date.now() -  mouseDownTime > 200) return
+    if (pointerMoved) return
 
     forceShowButton.value = !forceShowButton.value
 }
@@ -918,11 +936,15 @@ function onImgTouchEnd(event: TouchEvent) {
     handleEvent(event)
     onImgTouchFlag = false
 
+    const lastTouch = event.changedTouches[0]
+    const endX = lastTouch?.clientX ?? lastPointerPosition?.x ?? 0
+    const endY = lastTouch?.clientY ?? lastPointerPosition?.y ?? 0
+
     // 点击判定
     onClick(event)
 
     // 结束单指操作
-    dispatchPointerEnd(0, 0)
+    dispatchPointerEnd(endX, endY)
 }
 
 let onGlobalTouch = false
